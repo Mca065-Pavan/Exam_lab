@@ -2,10 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_USER = 'pavan'
         APP_NAME = 'flask-swarm-app'
-        IMAGE_TAG = "${DOCKER_HUB_USER}/${APP_NAME}:${BUILD_NUMBER}"
-        LATEST_TAG = "${DOCKER_HUB_USER}/${APP_NAME}:latest"
+        IMAGE_TAG = "${APP_NAME}:${BUILD_NUMBER}"
+        LATEST_TAG = "${APP_NAME}:latest"
     }
 
     stages {
@@ -21,21 +20,13 @@ pipeline {
             }
         }
 
-        stage('Docker Hub Push') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh 'echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin'
-                    sh 'docker push ${IMAGE_TAG}'
-                    sh 'docker push ${LATEST_TAG}'
-                }
-            }
-        }
-
         stage('Deploy to Docker Swarm') {
             steps {
                 sh '''
                     cd flask-swarm-project
+                    docker service rm flaskapp_flask-app 2>/dev/null || true
                     docker stack deploy -c docker-compose.yml flaskapp
+                    sleep 10
                 '''
             }
         }
@@ -45,6 +36,7 @@ pipeline {
                 sh '''
                     docker service ls
                     docker service ps flaskapp_flask-app
+                    curl -s http://127.0.0.1:5000 | head -5
                 '''
             }
         }
