@@ -1,0 +1,61 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_HUB_USER = 'pavan'
+        APP_NAME = 'flask-swarm-app'
+        IMAGE_TAG = "${DOCKER_HUB_USER}/${APP_NAME}:${BUILD_NUMBER}"
+        LATEST_TAG = "${DOCKER_HUB_USER}/${APP_NAME}:latest"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/Mca065-Pavan/Exam_lab.git', branch: 'main'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'cd flask-swarm-project && docker build -t ${IMAGE_TAG} -t ${LATEST_TAG} .'
+            }
+        }
+
+        stage('Docker Hub Push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin'
+                    sh 'docker push ${IMAGE_TAG}'
+                    sh 'docker push ${LATEST_TAG}'
+                }
+            }
+        }
+
+        stage('Deploy to Docker Swarm') {
+            steps {
+                sh '''
+                    cd flask-swarm-project
+                    docker stack deploy -c docker-compose.yml flaskapp
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    docker service ls
+                    docker service ps flaskapp_flask-app
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Flask Swarm Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Flask Swarm Pipeline failed!'
+        }
+    }
+}
